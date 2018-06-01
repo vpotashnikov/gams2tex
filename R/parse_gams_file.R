@@ -516,7 +516,8 @@ parse_model_and_all <- function(begin_file, pth = getwd()) {
 
 # Generate table that consist gams entity from  "parse_model_and_all"
 generate_table <- function(rs) {
-  dtf <- data.frame(name = character(), dim = character(), full_name = character(), desc = character(), type = character(), alias = character(), init = character(), stringsAsFactors = FALSE)
+  dtf <- data.frame(name = character(), dim = character(), full_name = character(), 
+                    desc = character(), type = character(), alias = character(), init = character(), stringsAsFactors = FALSE)
   if (length(rs) > 0) {
     dtf[1:length(rs), ] <- ''
     dtf[, 'name'] <- sapply(rs, function(x) x$name)
@@ -529,14 +530,85 @@ generate_table <- function(rs) {
     dtf[fl, 'ndim'] <- sapply(rs[fl], function(x) length(strsplit(x$arg, ',')[[1]]))
     dtf[!fl, 'ndim'] <- 0
     dtf[, 'init'] <- sapply(rs, function(x) if (is.null(x$init)) '' else paste(x$init, collapse = ', '))
+    fl <- sapply(rs, function(x) !is.null(x$alias))
+    dtf[fl, 'alias'] <- sapply(rs[fl], function(x) paste0(x$alias, collapse = ","))
   }
   dtf
 } 
 
 
 # Export to tex all set, table, parameter and variable
-export_to_tex_parameter <- function(rs, file_nm) {
+export_to_rtf_parameter <- function(rs, file_nm, width = 12, height = 8.5, font.size = 10, omi = c(1, 1, 1, 1)) {
+  vv <- generate_table(rs)[, c("full_name", "desc", "type", "alias"), drop = FALSE]
   
+  rtf <- RTF(file_nm, width = width, height = height, font.size = font.size, omi = omi)
+  
+  for (i in unique(vv$type)[unique(vv$type) %in% c("set", "scalar", "parameter", "table", "free variable", 
+                                                   "positive variable", "nonnegative variable" , "variable")]) {
+    addParagraph(rtf, paste0("List of ", i))
+    addParagraph(rtf, "")
+    addTable(rtf, vv[vv$type == i, c("full_name", "desc", "alias"[i == 'set'])])
+    addParagraph(rtf, "")
+    addPageBreak(rtf, width = width, height = height, font.size = font.size, omi = omi)
+  }
+  done(rtf)
+  shell.exec(file_nm)
 }
 
+
+# Export to tex all set, table, parameter and variable by equation
+export_to_rtf_parameter_by_equation <- function(rs, file_nm, width = 12, height = 8.5, 
+                                                font.size = 10, omi = c(1, 1, 1, 1), 
+                                                out_set = TRUE, out_parameter = TRUE, out_variable = TRUE, out_equation = TRUE) {
+  # Find data about equation 
+  zz <- generate_table(rs)
+  alias_map <- list()
+  fra <- zz[zz$alias != "", ]
+  kk <- strsplit(tolower(fra[, "alias"]), ",")
+  for (i in seq(length.out = nrow(fra))) {
+    for (j in kk[[i]]) {
+      alias_map[[j]] <- tolower(fra[i, "name"])
+  }}
+  # Get equation list
+  eq <- zz[zz$type == 'equation',, drop = FALSE]
+  ee <- eq[1, 1]
+  rr <- list()
+  for (ee in eq[, 1]) {
+    dcl <- rs[[ee]]$declar
+    lst <- unique(strsplit(gsub("[.][LlUuFfMm][PpOo]*", "", gsub("[.][.]", "", gsub("[# ]+", "#", 
+                                                                      gsub("[()*--+/=,$^]", "#", gsub("=[EeLlGgNn]=", "=", 
+      gsub("[[:blank:]]+", " ", gsub("['][^'\"]*[']", " ", gsub("[\"][^'\"]*[\"]", " ", 
+       paste0(dcl, collapse = ' '))))))))), "#")[[1]])
+    lst <- tolower(lst[!(tolower(lst) %in% c(ee, "ord", "smin", "smax", "ge", "and", "or", "card", "sameas", 
+                                             "sum", "prod", "sqr", "gt", "eq", "ne", "", "lt", "le", "", "abs", "not", "lc_init"))])
+    lst <- grep("^[0-9.]", lst, value = TRUE, invert = TRUE)
+    no_data <- lst[!(lst %in% c(names(alias_map), tolower(zz[, 1])))]
+    rr[[ee]] <- list(use = lst, no_data = no_data)
+  }
+  # export to rtf
+  tt <- zz[, c("name", "full_name", "desc", "type", "alias"), drop = FALSE]
+  rtf <- RTF(file_nm, width = width, height = height, font.size = font.size, omi = omi)
+  
+  for (ee in names(rr)) { 
+    cat(ee, '\n')
+    addParagraph(rtf, paste0("Information about equation \"", rs[[ee]]$name, "\""))
+    addParagraph(rtf, paste0(rs[[ee]]$desc, "\""))
+    if (out_equation) addParagraph(rtf, paste0(rs[[ee]]$declar, colapse = 'n'))
+    vv <- tt[tolower(tt$name) %in% rr[[ee]]$use,, drop = FALSE]
+    for (i in unique(vv$type)[unique(vv$type) %in% c("set"[out_set], "scalar"[out_parameter], "parameter"[out_parameter],
+                                                     "table"[out_parameter], "free variable"[out_variable], 
+                                                     "positive variable"[out_variable], "nonnegative variable"[out_variable], 
+                                                     "variable"[out_variable])]) {
+      addParagraph(rtf, paste0("List of ", i))
+      addParagraph(rtf, "")
+      addTable(rtf, vv[vv$type == i, c("full_name", "desc", "alias"[i == 'set'])])
+      if (length(rr[[ee]]$no_data) != 0) 
+        addParagraph(rtf, paste0(" No data abour \"", paste0(rr[[ee]]$no_data, collapse = '", "'), "\""))
+      addParagraph(rtf, "")
+    }
+    addPageBreak(rtf, width = width, height = height, font.size = font.size, omi = omi)
+  }
+  done(rtf)
+  shell.exec(file_nm)
+}
 

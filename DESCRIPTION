@@ -1,11 +1,12 @@
-Package: energyRt
+Package: gams2tex
 Type: Package
 Title: Utility for handle with GAMS, alpha-version, for testing only
 Version: 0.00.00.0001
-Date: 2018-05-30
+Date: 2018-06-01
 Authors@R: c(person("Vladimir", "Potashnikov", email = "potashnikov.vu@gmail.com", 
                     role = c("aut", "cre")))
 URL: https://github.com/vpotashnikov/gams2tex
 Description: Utility for handle with GAMS
 License: AGLP-3
+Depends: rtf
 
